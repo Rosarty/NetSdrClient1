@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -11,9 +11,9 @@ namespace EchoServer
     {
         private readonly int _port;
         private TcpListener _listener;
-        private CancellationTokenSource _cancellationTokenSource;
+        private readonly CancellationTokenSource _cancellationTokenSource; // ✅ зроблено readonly
 
-        //constuctor
+        // Constructor
         public EchoServer(int port)
         {
             _port = port;
@@ -32,7 +32,6 @@ namespace EchoServer
                 {
                     TcpClient client = await _listener.AcceptTcpClientAsync();
                     Console.WriteLine("Client connected.");
-
                     _ = Task.Run(() => HandleClientAsync(client, _cancellationTokenSource.Token));
                 }
                 catch (ObjectDisposedException)
@@ -53,8 +52,8 @@ namespace EchoServer
                 {
                     byte[] buffer = new byte[8192];
                     int bytesRead;
-
-                    while (!token.IsCancellationRequested && (bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
+                    while (!token.IsCancellationRequested &&
+                           (bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
                     {
                         // Echo back the received message
                         await stream.WriteAsync(buffer, 0, bytesRead, token);
@@ -90,14 +89,14 @@ namespace EchoServer
 
             string host = "127.0.0.1"; // Target IP
             int port = 60000;          // Target Port
-            int intervalMilliseconds = 5000; // Send every 3 seconds
+            int intervalMilliseconds = 5000; // Send every 5 seconds
 
             using (var sender = new UdpTimedSender(host, port))
             {
                 Console.WriteLine("Press any key to stop sending...");
                 sender.StartSending(intervalMilliseconds);
-
                 Console.WriteLine("Press 'q' to quit...");
+
                 while (Console.ReadKey(intercept: true).Key != ConsoleKey.Q)
                 {
                     // Just wait until 'q' is pressed
@@ -110,13 +109,13 @@ namespace EchoServer
         }
     }
 
-
     public class UdpTimedSender : IDisposable
     {
         private readonly string _host;
         private readonly int _port;
         private readonly UdpClient _udpClient;
         private Timer _timer;
+        private ushort _counter = 0;
 
         public UdpTimedSender(string host, int port)
         {
@@ -133,23 +132,24 @@ namespace EchoServer
             _timer = new Timer(SendMessageCallback, null, 0, intervalMilliseconds);
         }
 
-        ushort i = 0;
-
         private void SendMessageCallback(object state)
         {
             try
             {
-                //dummy data
                 Random rnd = new Random();
                 byte[] samples = new byte[1024];
                 rnd.NextBytes(samples);
-                i++;
+                _counter++;
 
-                byte[] msg = (new byte[] { 0x04, 0x84 }).Concat(BitConverter.GetBytes(i)).Concat(samples).ToArray();
+                byte[] msg = (new byte[] { 0x04, 0x84 })
+                    .Concat(BitConverter.GetBytes(_counter))
+                    .Concat(samples)
+                    .ToArray();
+
                 var endpoint = new IPEndPoint(IPAddress.Parse(_host), _port);
-
                 _udpClient.Send(msg, msg.Length, endpoint);
-                Console.WriteLine($"Message sent to {_host}:{_port} ");
+
+                Console.WriteLine($"Message sent to {_host}:{_port}");
             }
             catch (Exception ex)
             {
@@ -168,5 +168,8 @@ namespace EchoServer
             StopSending();
             _udpClient.Dispose();
         }
+    }
+}
+
     }
 }

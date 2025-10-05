@@ -44,33 +44,35 @@ namespace EchoServer
             Console.WriteLine("Server shutdown.");
         }
 
-        private async Task HandleClientAsync(TcpClient client, CancellationToken token)
+       private async Task HandleClientAsync(TcpClient client, CancellationToken token)
+{
+    using (NetworkStream stream = client.GetStream())
+    {
+        try
         {
-            using (NetworkStream stream = client.GetStream())
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+
+            while (!token.IsCancellationRequested &&
+                   (bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token)) > 0)
             {
-                try
-                {
-                    byte[] buffer = new byte[8192];
-                    int bytesRead;
-                    while (!token.IsCancellationRequested &&
-                           (bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
-                    {
-                        // Echo back the received message
-                        await stream.WriteAsync(buffer, 0, bytesRead, token);
-                        Console.WriteLine($"Echoed {bytesRead} bytes to the client.");
-                    }
-                }
-                catch (Exception ex) when (!(ex is OperationCanceledException))
-                {
-                    Console.WriteLine($"Error: {ex.Message}");
-                }
-                finally
-                {
-                    client.Close();
-                    Console.WriteLine("Client disconnected.");
-                }
+                // Echo back the received message
+                await stream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
+                Console.WriteLine($"Echoed {bytesRead} bytes to the client.");
             }
         }
+        catch (Exception ex) when (!(ex is OperationCanceledException))
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        finally
+        {
+            client.Close();
+            Console.WriteLine("Client disconnected.");
+        }
+    }
+}
+
 
         public void Stop()
         {

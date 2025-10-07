@@ -1,7 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
-using System.Linq; // ✅ FIX: додано для використання .Concat()
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,17 +10,15 @@ namespace EchoServer
     public class EchoServer
     {
         private readonly int _port;
-        private TcpListener _listener;
-        private readonly CancellationTokenSource _cancellationTokenSource; // ✅ readonly — правильне використання
+        private TcpListener? _listener; // ✅ зроблено nullable
+        private readonly CancellationTokenSource _cancellationTokenSource;
 
-        // ✅ FIX: Конструктор ініціалізує порт і токен скасування
         public EchoServer(int port)
         {
             _port = port;
             _cancellationTokenSource = new CancellationTokenSource();
         }
 
-        // ✅ FIX: метод асинхронного запуску сервера
         public async Task StartAsync()
         {
             _listener = new TcpListener(IPAddress.Any, _port);
@@ -34,12 +32,10 @@ namespace EchoServer
                     TcpClient client = await _listener.AcceptTcpClientAsync();
                     Console.WriteLine("Client connected.");
 
-                    // ✅ FIX: асинхронна обробка клієнтів у окремих задачах
                     _ = Task.Run(() => HandleClientAsync(client, _cancellationTokenSource.Token));
                 }
                 catch (ObjectDisposedException)
                 {
-                    // ✅ FIX: ловимо ситуацію, коли listener зупинено
                     break;
                 }
             }
@@ -47,8 +43,7 @@ namespace EchoServer
             Console.WriteLine("Server shutdown.");
         }
 
-        // ✅ FIX: оновлено метод для використання Memory<byte> у ReadAsync/WriteAsync
-        private async Task HandleClientAsync(TcpClient client, CancellationToken token)
+        private static async Task HandleClientAsync(TcpClient client, CancellationToken token) // ✅ static
         {
             using (NetworkStream stream = client.GetStream())
             {
@@ -76,26 +71,24 @@ namespace EchoServer
             }
         }
 
-        // ✅ FIX: Безпечне завершення роботи сервера
         public void Stop()
         {
             _cancellationTokenSource.Cancel();
-            _listener.Stop();
+            _listener?.Stop(); // ✅ null-safe
             _cancellationTokenSource.Dispose();
             Console.WriteLine("Server stopped.");
         }
 
-        // ✅ FIX: Точка входу — async Main
         public static async Task Main(string[] args)
         {
             EchoServer server = new EchoServer(5000);
 
-            // ✅ Запускаємо сервер асинхронно
-            _ = Task.Run(() => server.StartAsync());
+            // ✅ Тепер await
+            var serverTask = server.StartAsync();
 
-            string host = "127.0.0.1"; // Target IP
-            int port = 60000;          // Target Port
-            int intervalMilliseconds = 5000; // Send every 5 seconds
+            string host = "127.0.0.1";
+            int port = 60000;
+            int intervalMilliseconds = 5000;
 
             using (var sender = new UdpTimedSender(host, port))
             {
@@ -103,25 +96,23 @@ namespace EchoServer
                 sender.StartSending(intervalMilliseconds);
 
                 Console.WriteLine("Press 'q' to quit...");
-                while (Console.ReadKey(intercept: true).Key != ConsoleKey.Q)
-                {
-                    // Очікування натискання 'q'
-                }
+                while (Console.ReadKey(intercept: true).Key != ConsoleKey.Q) { }
 
                 sender.StopSending();
                 server.Stop();
                 Console.WriteLine("Sender stopped.");
             }
+
+            await serverTask; // ✅ await сервер перед завершенням програми
         }
     }
 
-    // ✅ Клас для відправлення UDP-повідомлень з інтервалом
     public class UdpTimedSender : IDisposable
     {
         private readonly string _host;
         private readonly int _port;
         private readonly UdpClient _udpClient;
-        private Timer _timer;
+        private Timer? _timer;
         private ushort _counter = 0;
 
         public UdpTimedSender(string host, int port)
@@ -136,11 +127,10 @@ namespace EchoServer
             if (_timer != null)
                 throw new InvalidOperationException("Sender is already running.");
 
-            // ✅ FIX: передаємо callback, null-стан і інтервал у мс
             _timer = new Timer(SendMessageCallback, null, 0, intervalMilliseconds);
         }
 
-        private void SendMessageCallback(object state)
+        private void SendMessageCallback(object? state)
         {
             try
             {
@@ -178,4 +168,3 @@ namespace EchoServer
         }
     }
 }
-

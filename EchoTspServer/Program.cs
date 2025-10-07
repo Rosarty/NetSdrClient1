@@ -10,7 +10,7 @@ namespace EchoServer
     public class EchoServer
     {
         private readonly int _port;
-        private TcpListener? _listener; // ✅ зроблено nullable
+        private TcpListener? _listener;
         private readonly CancellationTokenSource _cancellationTokenSource;
 
         public EchoServer(int port)
@@ -23,29 +23,38 @@ namespace EchoServer
         {
             _listener = new TcpListener(IPAddress.Any, _port);
             _listener.Start();
-            Console.WriteLine($"Server started on port {_port}.");
+            Console.WriteLine($"✅ Server started on port {_port}.");
 
-            while (!_cancellationTokenSource.Token.IsCancellationRequested)
+            try
             {
-                try
+                while (!_cancellationTokenSource.Token.IsCancellationRequested)
                 {
-                    TcpClient client = await _listener.AcceptTcpClientAsync();
+                    TcpClient client = await _listener.AcceptTcpClientAsync(_cancellationTokenSource.Token)
+                        .ConfigureAwait(false);
                     Console.WriteLine("Client connected.");
 
                     _ = Task.Run(() => HandleClientAsync(client, _cancellationTokenSource.Token));
                 }
-                catch (ObjectDisposedException)
-                {
-                    break;
-                }
             }
-
-            Console.WriteLine("Server shutdown.");
+            catch (OperationCanceledException)
+            {
+                // Очікуване завершення
+            }
+            catch (ObjectDisposedException)
+            {
+                // Listener зупинено
+            }
+            finally
+            {
+                _listener.Stop();
+                Console.WriteLine("Server shutdown.");
+            }
         }
 
-        private static async Task HandleClientAsync(TcpClient client, CancellationToken token) // ✅ static
+        private static async Task HandleClientAsync(TcpClient client, CancellationToken token)
         {
-            using (NetworkStream stream = client.GetStream())
+            await using (client)
+            await using (NetworkStream stream = client.GetStream())
             {
                 try
                 {
@@ -53,19 +62,24 @@ namespace EchoServer
                     int bytesRead;
 
                     while (!token.IsCancellationRequested &&
-                           (bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token)) > 0)
+                           (bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token)
+                               .ConfigureAwait(false)) > 0)
                     {
-                        await stream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
+                        await stream.WriteAsync(buffer.AsMemory(0, bytesRead), token)
+                            .ConfigureAwait(false);
                         Console.WriteLine($"Echoed {bytesRead} bytes to the client.");
                     }
                 }
-                catch (Exception ex) when (!(ex is OperationCanceledException))
+                catch (OperationCanceledException)
+                {
+                    // сервер зупиняється
+                }
+                catch (Exception ex)
                 {
                     Console.WriteLine($"Error: {ex.Message}");
                 }
                 finally
                 {
-                    client.Close();
                     Console.WriteLine("Client disconnected.");
                 }
             }
@@ -73,8 +87,9 @@ namespace EchoServer
 
         public void Stop()
         {
+            Console.WriteLine("Stopping server...");
             _cancellationTokenSource.Cancel();
-            _listener?.Stop(); // ✅ null-safe
+            _listener?.Stop();
             _cancellationTokenSource.Dispose();
             Console.WriteLine("Server stopped.");
         }
@@ -82,8 +97,6 @@ namespace EchoServer
         public static async Task Main(string[] args)
         {
             EchoServer server = new EchoServer(5000);
-
-            // ✅ Тепер await
             var serverTask = server.StartAsync();
 
             string host = "127.0.0.1";
@@ -93,6 +106,7 @@ namespace EchoServer
             using (var sender = new UdpTimedSender(host, port))
             {
                 Console.WriteLine("Press any key to start sending messages...");
+                Console.ReadKey(true);
                 sender.StartSending(intervalMilliseconds);
 
                 Console.WriteLine("Press 'q' to quit...");
@@ -103,7 +117,7 @@ namespace EchoServer
                 Console.WriteLine("Sender stopped.");
             }
 
-            await serverTask; // ✅ await сервер перед завершенням програми
+            await serverTask.ConfigureAwait(false);
         }
     }
 
@@ -139,7 +153,7 @@ namespace EchoServer
                 rnd.NextBytes(samples);
 
                 _counter++;
-                byte[] msg = (new byte[] { 0x04, 0x84 })
+                byte[] msg = new byte[] { 0x04, 0x84 }
                     .Concat(BitConverter.GetBytes(_counter))
                     .Concat(samples)
                     .ToArray();
@@ -147,7 +161,7 @@ namespace EchoServer
                 var endpoint = new IPEndPoint(IPAddress.Parse(_host), _port);
                 _udpClient.Send(msg, msg.Length, endpoint);
 
-                Console.WriteLine($"Message sent to {_host}:{_port}");
+                Console.WriteLine($"📤 Message #{_counter} sent to {_host}:{_port}");
             }
             catch (Exception ex)
             {
@@ -159,11 +173,13 @@ namespace EchoServer
         {
             _timer?.Dispose();
             _timer = null;
+            Console.WriteLine("⏹ Message sending stopped.");
         }
 
         public void Dispose()
         {
             StopSending();
+            _udpClient.Close();
             _udpClient.Dispose();
         }
     }

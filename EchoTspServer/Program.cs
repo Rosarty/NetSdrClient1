@@ -168,7 +168,3 @@ namespace EchoServer
         }
     }
 }
-
-    }
-}
-

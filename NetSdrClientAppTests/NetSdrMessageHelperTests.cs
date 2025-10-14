@@ -54,8 +54,7 @@ namespace NetSdrClientAppTests
             Assert.That(parametersBytes.Count(), Is.EqualTo(parametersLength));
         }
 
-    
-
+   
         // ✅ Новий тест 2 — Перевірка на нульову довжину параметрів
         [Test]
         public void GetControlItemMessage_ShouldWork_WithZeroLengthParameters()

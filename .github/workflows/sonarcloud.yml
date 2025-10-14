@@ -97,7 +97,9 @@ jobs:
 
       # 7️⃣ Завершення сканування
       - name: SonarScanner End
-        run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
         shell: pwsh
 
       # 8️⃣ (опціонально) Завантаження звіту як артефакт

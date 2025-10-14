@@ -40,31 +40,27 @@ namespace NetSdrClientApp.Messages
 
         public static byte[] GetControlItemMessage(MsgTypes type, ControlItemCodes itemCode, byte[] parameters)
         {
-            return GetMessage(type, itemCode, parameters);
-        }
+           private static byte[] GetMessage(MsgTypes type, ControlItemCodes itemCode, byte[] parameters)
+{
+    if (parameters == null)
+        throw new ArgumentNullException(nameof(parameters));
 
-        public static byte[] GetDataItemMessage(MsgTypes type, byte[] parameters)
-        {
-            return GetMessage(type, ControlItemCodes.None, parameters);
-        }
+    var itemCodeBytes = Array.Empty<byte>();
+    if (itemCode != ControlItemCodes.None)
+    {
+        itemCodeBytes = BitConverter.GetBytes((ushort)itemCode);
+    }
 
-        private static byte[] GetMessage(MsgTypes type, ControlItemCodes itemCode, byte[] parameters)
-        {
-            var itemCodeBytes = Array.Empty<byte>();
-            if (itemCode != ControlItemCodes.None)
-            {
-                itemCodeBytes = BitConverter.GetBytes((ushort)itemCode);
-            }
+    var headerBytes = GetHeader(type, itemCodeBytes.Length + parameters.Length);
 
-            var headerBytes = GetHeader(type, itemCodeBytes.Length + parameters.Length);
+    List<byte> msg = new List<byte>();
+    msg.AddRange(headerBytes);
+    msg.AddRange(itemCodeBytes);
+    msg.AddRange(parameters);
 
-            List<byte> msg = new List<byte>();
-            msg.AddRange(headerBytes);
-            msg.AddRange(itemCodeBytes);
-            msg.AddRange(parameters);
+    return msg.ToArray();
+}
 
-            return msg.ToArray();
-        }
 
         public static bool TranslateMessage(byte[] msg, out MsgTypes type, out ControlItemCodes itemCode, out ushort sequenceNumber, out byte[] body)
         {

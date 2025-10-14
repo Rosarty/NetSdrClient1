@@ -40,27 +40,34 @@ namespace NetSdrClientApp.Messages
 
         public static byte[] GetControlItemMessage(MsgTypes type, ControlItemCodes itemCode, byte[] parameters)
         {
-           private static byte[] GetMessage(MsgTypes type, ControlItemCodes itemCode, byte[] parameters)
-{
-    if (parameters == null)
-        throw new ArgumentNullException(nameof(parameters));
+            return GetMessage(type, itemCode, parameters);
+        }
 
-    var itemCodeBytes = Array.Empty<byte>();
-    if (itemCode != ControlItemCodes.None)
-    {
-        itemCodeBytes = BitConverter.GetBytes((ushort)itemCode);
-    }
+        public static byte[] GetDataItemMessage(MsgTypes type, byte[] parameters)
+        {
+            return GetMessage(type, ControlItemCodes.None, parameters);
+        }
 
-    var headerBytes = GetHeader(type, itemCodeBytes.Length + parameters.Length);
+        private static byte[] GetMessage(MsgTypes type, ControlItemCodes itemCode, byte[] parameters)
+        {
+            if (parameters == null)
+                throw new ArgumentNullException(nameof(parameters));
 
-    List<byte> msg = new List<byte>();
-    msg.AddRange(headerBytes);
-    msg.AddRange(itemCodeBytes);
-    msg.AddRange(parameters);
+            var itemCodeBytes = Array.Empty<byte>();
+            if (itemCode != ControlItemCodes.None)
+            {
+                itemCodeBytes = BitConverter.GetBytes((ushort)itemCode);
+            }
 
-    return msg.ToArray();
-}
+            var headerBytes = GetHeader(type, itemCodeBytes.Length + parameters.Length);
 
+            List<byte> msg = new List<byte>();
+            msg.AddRange(headerBytes);
+            msg.AddRange(itemCodeBytes);
+            msg.AddRange(parameters);
+
+            return msg.ToArray();
+        }
 
         public static bool TranslateMessage(byte[] msg, out MsgTypes type, out ControlItemCodes itemCode, out ushort sequenceNumber, out byte[] body)
         {
@@ -105,7 +112,7 @@ namespace NetSdrClientApp.Messages
         public static IEnumerable<int> GetSamples(ushort sampleSize, byte[] body)
         {
             sampleSize /= 8; //to bytes
-            if (sampleSize  > 4)
+            if (sampleSize > 4)
             {
                 throw new ArgumentOutOfRangeException();
             }

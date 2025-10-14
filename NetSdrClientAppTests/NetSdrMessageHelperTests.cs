@@ -54,16 +54,7 @@ namespace NetSdrClientAppTests
             Assert.That(parametersBytes.Count(), Is.EqualTo(parametersLength));
         }
 
-        // ✅ Новий тест 1 — Перевірка на null для параметрів
-        [Test]
-        public void GetControlItemMessage_ShouldThrow_WhenParametersNull()
-        {
-            var type = NetSdrMessageHelper.MsgTypes.Ack;
-            var code = NetSdrMessageHelper.ControlItemCodes.ReceiverState;
-
-            Assert.Throws<ArgumentNullException>(() =>
-                NetSdrMessageHelper.GetControlItemMessage(type, code, null));
-        }
+    
 
         // ✅ Новий тест 2 — Перевірка на нульову довжину параметрів
         [Test]

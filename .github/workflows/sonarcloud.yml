@@ -36,75 +36,48 @@ on:
   workflow_dispatch:
 
 permissions:
-  pull-requests: read  # дозволяє SonarCloud коментувати PR
+  pull-requests: read # allows SonarCloud to decorate PRs with analysis results
 
 jobs:
   sonar-check:
-    name: SonarCloud Check
-    runs-on: windows-latest   # рекомендується для .NET
+    name: Sonar Check
+    runs-on: windows-latest   # безпечно для будь-яких .NET проектів
     steps:
-      # 1️⃣ Завантаження репозиторію
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # потрібно для коректного аналізу в SonarCloud
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
 
-      # 2️⃣ Встановлення .NET SDK
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      # 3️⃣ Встановлення інструментів Coverlet і SonarScanner
-      - name: Install tools
-        run: |
-          dotnet tool install --global coverlet.console
-          dotnet tool install --global dotnet-sonarscanner
-          echo "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
-        shell: pwsh
-
-      # 4️⃣ Ініціація сканування SonarCloud
+      # 1) BEGIN: SonarScanner for .NET
       - name: SonarScanner Begin
         run: |
+          dotnet tool install --global dotnet-sonarscanner
+          echo "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
           dotnet sonarscanner begin `
-            /k:"Rosarty_NetSdrClient1" `
-            /o:"rosarty" `
-            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" `
-            /d:sonar.host.url="https://sonarcloud.io" `
-            /d:sonar.cs.opencover.reportsPaths="NetSdrClientAppTests/TestResults/coverage.xml" `
-            /d:sonar.exclusions=**/bin/**,**/obj/**,**/*.yml `
-            /d:sonar.qualitygate.wait=true
+           / k:"Rosarty_NetSdrClient1" `
+           / o:"rosarty" `
+          /d:sonar.token="${{ secrets.SONAR_TOKEN }}" `
+          /d:sonar.cs.opencover.reportsPaths="**/coverage.xml" `
+          /d:sonar.cpd.cs.minimumTokens=40 `
+          /d:sonar.cpd.cs.minimumLines=5 `
+          /d:sonar.exclusions=**/bin/**,**/obj/**,**/sonarcloud.yml `
+          /d:sonar.qualitygate.wait=true
         shell: pwsh
-
-      # 5️⃣ Відновлення залежностей і збірка
+      # 2) BUILD & TEST
       - name: Restore
         run: dotnet restore NetSdrClient.sln
-        shell: pwsh
-
       - name: Build
         run: dotnet build NetSdrClient.sln -c Release --no-restore
-        shell: pwsh
-
-      # 6️⃣ Запуск тестів із покриттям
-      - name: Run tests with coverage
+      - name: Tests with coverage (OpenCover)
         run: |
-          dotnet test NetSdrClientAppTests/NetSdrClientAppTests.csproj `
-            -c Release --no-build `
-            /p:CollectCoverage=true `
-            /p:CoverletOutput=TestResults/coverage.xml `
-            /p:CoverletOutputFormat=opencover
-        shell: pwsh
-
-      # 7️⃣ Завершення сканування
+         dotnet test NetSdrClientAppTests/NetSdrClientAppTests.csproj -c Release --no-build `
+          /p:CollectCoverage=true `
+         /p:CoverletOutput=TestResults/coverage.xml `
+         /p:CoverletOutputFormat=opencover
+         shell: pwsh
+      # 3) END: SonarScanner
       - name: SonarScanner End
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: dotnet sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
+        run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
         shell: pwsh
-
-      # 8️⃣ (опціонально) Завантаження звіту як артефакт
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: NetSdrClientAppTests/TestResults/coverage.xml

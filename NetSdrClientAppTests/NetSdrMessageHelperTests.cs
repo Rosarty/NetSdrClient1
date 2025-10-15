@@ -66,8 +66,9 @@ namespace NetSdrClientAppTests
 
             Assert.That(msg.Length, Is.GreaterThanOrEqualTo(4)); // тільки заголовок + код
         }
-        Test]
-public void GetControlItemMessage_ShouldEncodeAndDecodeProperly()
+
+        [Test]
+        public void GetControlItemMessage_ShouldEncodeAndDecodeProperly()
         {
             var type = NetSdrMessageHelper.MsgTypes.Ack;
             var code = NetSdrMessageHelper.ControlItemCodes.ReceiverState;

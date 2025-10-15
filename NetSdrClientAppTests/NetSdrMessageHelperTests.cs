@@ -121,5 +121,4 @@ namespace NetSdrClientAppTests
         }
     }
 }
- / k:"Rosarty_NetSdrClient1" `
-            / o:"rosarty" `
+ 

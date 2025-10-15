@@ -60,7 +60,7 @@ jobs:
           dotnet-sonarscanner begin `
             /k:"Rosarty_NetSdrClient1" `
             /o:"rosarty" `
-            /d:sonar.login="${{ secrets.SONAR_TOKEN }}" `
+            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" `
             /d:sonar.cs.opencover.reportsPaths="**/coverage.xml" `
             /d:sonar.exclusions="**/bin/**,**/obj/**" `
             /d:sonar.qualitygate.wait=true
@@ -86,4 +86,4 @@ jobs:
       - name: SonarScanner End
         shell: pwsh
         run: |
-          dotnet-sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+          dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"

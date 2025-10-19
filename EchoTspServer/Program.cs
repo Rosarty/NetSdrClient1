@@ -10,13 +10,19 @@ namespace EchoServer
     public class EchoServer
     {
         private readonly int _port;
-        private TcpListener? _listener; // ✅ зроблено nullable
+        private TcpListener? _listener;
         private readonly CancellationTokenSource _cancellationTokenSource;
 
         public EchoServer(int port)
         {
             _port = port;
             _cancellationTokenSource = new CancellationTokenSource();
+
+            // 🔁 ДУБЛІКАТ ініціалізації (для тесту аналізатора)
+            if (_cancellationTokenSource == null)
+            {
+                _cancellationTokenSource = new CancellationTokenSource();
+            }
         }
 
         public async Task StartAsync()
@@ -31,7 +37,6 @@ namespace EchoServer
                 {
                     TcpClient client = await _listener.AcceptTcpClientAsync();
                     Console.WriteLine("Client connected.");
-
                     _ = Task.Run(() => HandleClientAsync(client, _cancellationTokenSource.Token));
                 }
                 catch (ObjectDisposedException)
@@ -43,7 +48,7 @@ namespace EchoServer
             Console.WriteLine("Server shutdown.");
         }
 
-        private static async Task HandleClientAsync(TcpClient client, CancellationToken token) // ✅ static
+        private static async Task HandleClientAsync(TcpClient client, CancellationToken token)
         {
             using (NetworkStream stream = client.GetStream())
             {
@@ -52,6 +57,15 @@ namespace EchoServer
                     byte[] buffer = new byte[8192];
                     int bytesRead;
 
+                    // 🔁 ДУБЛІКАТ: два ідентичні цикли читання
+                    while (!token.IsCancellationRequested &&
+                           (bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token)) > 0)
+                    {
+                        await stream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
+                        Console.WriteLine($"Echoed {bytesRead} bytes to the client.");
+                    }
+
+                    // 🔁 Повтор того самого блоку
                     while (!token.IsCancellationRequested &&
                            (bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token)) > 0)
                     {
@@ -74,7 +88,7 @@ namespace EchoServer
         public void Stop()
         {
             _cancellationTokenSource.Cancel();
-            _listener?.Stop(); // ✅ null-safe
+            _listener?.Stop();
             _cancellationTokenSource.Dispose();
             Console.WriteLine("Server stopped.");
         }
@@ -83,9 +97,7 @@ namespace EchoServer
         {
             EchoServer server = new EchoServer(5000);
 
-            // ✅ Тепер await
             var serverTask = server.StartAsync();
-
             string host = "127.0.0.1";
             int port = 60000;
             int intervalMilliseconds = 5000;
@@ -103,7 +115,7 @@ namespace EchoServer
                 Console.WriteLine("Sender stopped.");
             }
 
-            await serverTask; // ✅ await сервер перед завершенням програми
+            await serverTask;
         }
     }
 
@@ -137,17 +149,25 @@ namespace EchoServer
                 Random rnd = new Random();
                 byte[] samples = new byte[1024];
                 rnd.NextBytes(samples);
-
                 _counter++;
+
+                // 🔁 ДУБЛІКАТ: двічі однакове створення повідомлення
                 byte[] msg = (new byte[] { 0x04, 0x84 })
                     .Concat(BitConverter.GetBytes(_counter))
                     .Concat(samples)
                     .ToArray();
-
                 var endpoint = new IPEndPoint(IPAddress.Parse(_host), _port);
                 _udpClient.Send(msg, msg.Length, endpoint);
-
                 Console.WriteLine($"Message sent to {_host}:{_port}");
+
+                // 🔁 Повторення того ж блоку
+                byte[] msg2 = (new byte[] { 0x04, 0x84 })
+                    .Concat(BitConverter.GetBytes(_counter))
+                    .Concat(samples)
+                    .ToArray();
+                var endpoint2 = new IPEndPoint(IPAddress.Parse(_host), _port);
+                _udpClient.Send(msg2, msg2.Length, endpoint2);
+                Console.WriteLine($"Message sent again to {_host}:{_port}");
             }
             catch (Exception ex)
             {

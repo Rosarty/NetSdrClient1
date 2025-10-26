@@ -6,7 +6,6 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using NetSdrClientApp.Messages; // <- навмисна залежність для падіння тесту
 
 namespace NetSdrClientApp.Networking
 {
@@ -25,9 +24,6 @@ namespace NetSdrClientApp.Networking
         {
             _host = host;
             _port = port;
-
-            // 🔹 Навмисна залежність
-            CreateDummyMessage();
         }
 
         public void Connect()
@@ -122,13 +118,5 @@ namespace NetSdrClientApp.Networking
                 Console.WriteLine("Listener stopped.");
             }
         }
-
-        // 🔹 Навмисна залежність на Messages
-        private void CreateDummyMessage()
-        {
-            // Виклик статичного методу або створення об’єкта з Messages
-            var dummy = NetSdrMessageHelper.CreateDummyMessage();
-        }
     }
 }
-

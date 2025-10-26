@@ -1,6 +1,7 @@
 ﻿using Moq;
 using NetSdrClientApp;
 using NetSdrClientApp.Networking;
+using EchoTspServer;
 
 namespace NetSdrClientAppTests;
 

@@ -133,5 +133,10 @@ namespace NetSdrClientApp.Messages
                 throw new ArgumentException("Message length exceeds allowed value");
             return lengthWithHeader;
         }
+
+        internal static object CreateDummyMessage()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

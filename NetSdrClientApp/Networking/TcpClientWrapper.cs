@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using NetSdrClientApp.Messages; // <- навмисна залежність для падіння тесту
 
 namespace NetSdrClientApp.Networking
 {
@@ -24,6 +25,9 @@ namespace NetSdrClientApp.Networking
         {
             _host = host;
             _port = port;
+
+            // 🔹 Навмисна залежність
+            CreateDummyMessage();
         }
 
         public void Connect()
@@ -70,7 +74,6 @@ namespace NetSdrClientApp.Networking
             Console.WriteLine("Disconnected.");
         }
 
-        // 🔹 Універсальний метод для відправки
         public async Task SendMessageAsync(byte[] data)
         {
             if (!Connected || _stream == null || !_stream.CanWrite)
@@ -82,11 +85,10 @@ namespace NetSdrClientApp.Networking
             await _stream.WriteAsync(data, 0, data.Length);
         }
 
-        // 🔹 Версія для string (без дублювання)
         public Task SendMessageAsync(string message)
         {
             byte[] data = Encoding.UTF8.GetBytes(message);
-            return SendMessageAsync(data); // Виклик основного методу
+            return SendMessageAsync(data);
         }
 
         private async Task StartListeningAsync()
@@ -120,5 +122,13 @@ namespace NetSdrClientApp.Networking
                 Console.WriteLine("Listener stopped.");
             }
         }
+
+        // 🔹 Навмисна залежність на Messages
+        private void CreateDummyMessage()
+        {
+            // Виклик статичного методу або створення об’єкта з Messages
+            var dummy = NetSdrMessageHelper.CreateDummyMessage();
+        }
     }
 }
+

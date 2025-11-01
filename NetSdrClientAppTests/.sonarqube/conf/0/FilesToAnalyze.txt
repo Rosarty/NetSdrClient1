@@ -1,0 +1,7 @@
+﻿C:\Users\Ростислав\Source\Repos\NetSdrClient1\NetSdrClientApp\Messages\NetSdrMessageHelper.cs
+C:\Users\Ростислав\Source\Repos\NetSdrClient1\NetSdrClientApp\NetSdrClient.cs
+C:\Users\Ростислав\Source\Repos\NetSdrClient1\NetSdrClientApp\Networking\ITcpClient.cs
+C:\Users\Ростислав\Source\Repos\NetSdrClient1\NetSdrClientApp\Networking\IUdpClient.cs
+C:\Users\Ростислав\Source\Repos\NetSdrClient1\NetSdrClientApp\Networking\TcpClientWrapper.cs
+C:\Users\Ростислав\Source\Repos\NetSdrClient1\NetSdrClientApp\Networking\UdpClientWrapper.cs
+C:\Users\Ростислав\Source\Repos\NetSdrClient1\NetSdrClientApp\Program.cs

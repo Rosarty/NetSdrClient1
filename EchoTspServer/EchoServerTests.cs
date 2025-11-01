@@ -1,73 +1,146 @@
-using System.IO;
+using System;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
-public class FakeLogger : ILogger
+namespace EchoServer.Tests
 {
-    public string Logs = "";
-    public void Log(string message) => Logs += message + "\n";
-}
-
-public class FakeTcpClient : TcpClient
-{
-    private readonly MemoryStream _input;
-    private readonly MemoryStream _output;
-
-    public FakeTcpClient(string inputMessage)
+    public class EchoServerTests
     {
-        _input = new MemoryStream(Encoding.UTF8.GetBytes(inputMessage));
-        _output = new MemoryStream();
-    }
+        [Fact]
+        public async Task Server_ShouldEchoMessage()
+        {
+            // Arrange
+            int port = 5050;
+            var server = new EchoServer.EchoServer(port);
+            var serverTask = server.StartAsync();
 
-    public override NetworkStream GetStream()
-    {
-        return new FakeNetworkStream(_input, _output);
-    }
+            await Task.Delay(500); // Дати серверу стартувати
 
-    public string GetOutput() => Encoding.UTF8.GetString(_output.ToArray());
-}
+            using TcpClient client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", port);
+            using NetworkStream stream = client.GetStream();
 
-public class FakeNetworkStream : NetworkStream
-{
-    private readonly Stream _input;
-    private readonly Stream _output;
+            string message = "Hello, Echo!";
+            byte[] data = Encoding.UTF8.GetBytes(message);
+            await stream.WriteAsync(data);
 
-    public FakeNetworkStream(Stream input, Stream output)
-        : base(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
-    {
-        _input = input;
-        _output = output;
-    }
+            byte[] buffer = new byte[1024];
+            int bytesRead = await stream.ReadAsync(buffer);
 
-    public override bool CanRead => _input.CanRead;
-    public override bool CanWrite => _output.CanWrite;
+            string response = Encoding.UTF8.GetString(buffer, 0, bytesRead);
 
-    public override async Task<int> ReadAsync(byte[] buffer, int offset, int size, CancellationToken token)
-        => await _input.ReadAsync(buffer.AsMemory(offset, size), token);
+            // Assert
+            Assert.Equal(message, response);
 
-    public override async Task WriteAsync(byte[] buffer, int offset, int size, CancellationToken token)
-        => await _output.WriteAsync(buffer.AsMemory(offset, size), token);
-}
+            // Cleanup
+            server.Stop();
+            await serverTask;
+        }
 
-public class EchoServerTests
-{
-    [Fact]
-    public async Task HandleClientAsync_ShouldEchoMessage()
-    {
-        // Arrange
-        var logger = new FakeLogger();
-        var server = new EchoServer(5000, logger);
-        var client = new FakeTcpClient("Hello Test");
+        [Fact]
+        public async Task Server_ShouldHandleClientDisconnect()
+        {
+            int port = 5051;
+            var server = new EchoServer.EchoServer(port);
+            var serverTask = server.StartAsync();
+            await Task.Delay(500);
 
-        // Act
-        await server.HandleClientAsync(client, CancellationToken.None);
+            var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", port);
+            client.Close();
 
-        // Assert
-        var response = client.GetOutput();
-        Assert.Equal("Hello Test", response);
-        Assert.Contains("Echoed", logger.Logs);
+            await Task.Delay(500);
+
+            server.Stop();
+            await serverTask;
+
+            Assert.True(true, "Client disconnected handled gracefully");
+        }
+
+        [Fact]
+        public async Task UdpSender_ShouldSendUdpPackets()
+        {
+            // Arrange
+            int port = 6060;
+            using UdpClient receiver = new UdpClient(port);
+            var sender = new EchoServer.UdpTimedSender("127.0.0.1", port);
+
+            sender.StartSending(500);
+
+            // Act
+            var result = await receiver.ReceiveAsync(); // Отримаємо один пакет
+
+            // Assert
+            Assert.NotNull(result.Buffer);
+            Assert.True(result.Buffer.Length > 0);
+            Assert.Equal(0x04, result.Buffer[0]);
+            Assert.Equal(0x84, result.Buffer[1]);
+
+            sender.StopSending();
+            sender.Dispose();
+        }
+
+        [Fact]
+        public void StartSending_ShouldThrowIfAlreadyRunning()
+        {
+            var sender = new EchoServer.UdpTimedSender("127.0.0.1", 6000);
+            sender.StartSending(1000);
+
+            Assert.Throws<InvalidOperationException>(() => sender.StartSending(1000));
+
+            sender.StopSending();
+            sender.Dispose();
+        }
+
+        [Fact]
+        public void StopSending_ShouldDisposeTimer()
+        {
+            var sender = new EchoServer.UdpTimedSender("127.0.0.1", 6000);
+            sender.StartSending(1000);
+
+            sender.StopSending();
+
+            // Повторний виклик StopSending не повинен падати
+            sender.StopSending();
+
+            sender.Dispose();
+            Assert.True(true);
+        }
+
+        [Fact]
+        public async Task FullIntegration_ShouldRunServerAndUdpSender()
+        {
+            int tcpPort = 5055;
+            int udpPort = 6065;
+            var server = new EchoServer.EchoServer(tcpPort);
+            var serverTask = server.StartAsync();
+
+            await Task.Delay(500);
+
+            using var sender = new EchoServer.UdpTimedSender("127.0.0.1", udpPort);
+            sender.StartSending(500);
+
+            // TCP тест
+            using TcpClient client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", tcpPort);
+            using NetworkStream stream = client.GetStream();
+
+            byte[] msg = Encoding.UTF8.GetBytes("Ping!");
+            await stream.WriteAsync(msg);
+            byte[] buffer = new byte[1024];
+            int bytesRead = await stream.ReadAsync(buffer);
+            string response = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+
+            Assert.Equal("Ping!", response);
+
+            // Завершення
+            sender.StopSending();
+            sender.Dispose();
+            server.Stop();
+            await serverTask;
+        }
     }
 }

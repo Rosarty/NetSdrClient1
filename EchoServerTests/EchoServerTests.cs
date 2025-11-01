@@ -1,64 +1,110 @@
-using System.Net.Sockets;
 using EchoTspServer.Application.Interfaces;
 using EchoTspServer.Application.Services;
 using Moq;
-using NUnit.Framework;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
+using Xunit;
 
 namespace EchoTspServer.Tests
 {
-    [TestFixture]
-    public class EchoServerTests
+public class EchoServerTests
+{
+private const int TestPort = 5000;
+
+```
+    [Fact]
+    public async Task StartAsync_ClientConnects_ClientHandlerCalled()
     {
-        private Mock<ILogger> _loggerMock;
-        private Mock<IClientHandler> _handlerMock;
-        private EchoServer _server;
+        var loggerMock = new Mock<ILogger>();
+        var clientHandlerMock = new Mock<IClientHandler>();
+        var server = new EchoServer(TestPort, loggerMock.Object, clientHandlerMock.Object);
 
-        [SetUp]
-        public void Setup()
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(3000); // Р°РІС‚РѕРјР°С‚РёС‡РЅР° Р·СѓРїРёРЅРєР° С‚РµСЃС‚Сѓ С‡РµСЂРµР· 3 СЃРµРєСѓРЅРґРё
+
+        var serverTask = server.StartAsync();
+
+        // РџС–РґРєР»СЋС‡Р°С”РјРѕ С‚РµСЃС‚РѕРІРѕРіРѕ РєР»С–С”РЅС‚Р°
+        using var client = new TcpClient();
+        await client.ConnectAsync("127.0.0.1", TestPort);
+
+        await Task.Delay(500); // С‡РµРєР°С”РјРѕ РѕР±СЂРѕР±РєСѓ РїС–РґРєР»СЋС‡РµРЅРЅСЏ
+
+        server.Stop();
+        await serverTask;
+
+        clientHandlerMock.Verify(h => h.HandleClientAsync(It.IsAny<TcpClient>(), It.IsAny<CancellationToken>()), 
+                                  Times.AtLeastOnce);
+        loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Client connected"))), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task Stop_ServerAlreadyStopped_NoException()
+    {
+        var loggerMock = new Mock<ILogger>();
+        var clientHandlerMock = new Mock<IClientHandler>();
+        var server = new EchoServer(TestPort, loggerMock.Object, clientHandlerMock.Object);
+
+        server.Stop(); // РїРµСЂС€РёР№ РІРёРєР»РёРє
+        var exception = await Record.ExceptionAsync(() => Task.Run(() => server.Stop())); // РґСЂСѓРіРёР№ РІРёРєР»РёРє
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public async Task StartAsync_ListenerThrowsObjectDisposedException_ServerStopsGracefully()
+    {
+        var loggerMock = new Mock<ILogger>();
+        var clientHandlerMock = new Mock<IClientHandler>();
+        var server = new EchoServer(TestPort, loggerMock.Object, clientHandlerMock.Object);
+
+        var serverTask = server.StartAsync();
+
+        server.Stop();
+        await serverTask;
+
+        loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Server shutdown"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartAsync_ClientConnects_HandlerAndLoggerCalled()
+    {
+        var clientHandlerMock = new Mock<IClientHandler>();
+        var loggerMock = new Mock<ILogger>();
+        var server = new EchoServer(6002, loggerMock.Object, clientHandlerMock.Object);
+        var serverTask = server.StartAsync();
+
+        using (var client = new TcpClient())
         {
-            _loggerMock = new Mock<ILogger>();
-            _handlerMock = new Mock<IClientHandler>();
-            _server = new EchoServer(6001, _loggerMock.Object, _handlerMock.Object);
+            await client.ConnectAsync("127.0.0.1", 6002);
+            await Task.Delay(200);
         }
 
-        [Test]
-        public async Task StartAsync_StartsAndStopsWithoutError()
-        {
-            var task = _server.StartAsync();
-            await Task.Delay(100); // дати серверу запуститися
+        server.Stop();
+        await serverTask;
 
-            // act
-            _server.Stop();
+        clientHandlerMock.Verify(h => h.HandleClientAsync(It.IsAny<TcpClient>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+        loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Client connected"))), Times.AtLeastOnce);
+    }
 
-            try
-            {
-                await task; // дочекаємось завершення
-            }
-            catch (SocketException ex)
-            {
-                // Це очікувано, бо listener закривається під час AcceptTcpClientAsync
-                Assert.That(ex.SocketErrorCode, Is.EqualTo(SocketError.OperationAborted));
-            }
+    [Fact]
+    public async Task StartAsync_StopsGracefully_ObjectDisposedExceptionHandled()
+    {
+        var loggerMock = new Mock<ILogger>();
+        var clientHandlerMock = new Mock<IClientHandler>();
+        var server = new EchoServer(6003, loggerMock.Object, clientHandlerMock.Object);
 
-            _loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Server started"))), Times.Once);
-            _loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Server stopped"))), Times.Once);
-        }
+        var serverTask = server.StartAsync();
+        await Task.Delay(100);
 
+        server.Stop();
+        await serverTask;
 
-        [Test]
-        public void Stop_CanBeCalledMultipleTimes_SafeToCall()
-        {
-            Assert.DoesNotThrow(() =>
-            {
-                _server.Stop();
-                _server.Stop();
-            });
-        }
-
-        [Test]
-        public void Constructor_SetsDependenciesProperly()
-        {
-            Assert.NotNull(_server);
-        }
+        loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Server shutdown"))), Times.Once);
     }
 }
+```
+
+}
+

@@ -5,34 +5,40 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 
+		```
 		<IsPackable>false</IsPackable>
 		<IsTestProject>true</IsTestProject>
 
-		<!-- 🧩 Додано для Sonar + Coverlet -->
+		<!-- 🧩 Покриття тестів для SonarQube -->
 		<CollectCoverage>true</CollectCoverage>
 		<CoverletOutputFormat>cobertura</CoverletOutputFormat>
-		<CoverletOutput>$(MSBuildProjectDirectory)\TestResults\coverage.cobertura.xml</CoverletOutput>
+		<CoverletOutput>$(MSBuildProjectDirectory)/TestResults/coverage.cobertura.xml</CoverletOutput>
+		```
+
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="coverlet.collector" Version="6.0.0" />
-		<PackageReference Include="coverlet.msbuild" Version="6.0.4" />
+		<!-- Тестовий фреймворк NUnit -->
 		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
-		<PackageReference Include="Moq" Version="4.20.72" />
-		<PackageReference Include="NetArchTest.Rules" Version="1.3.2" />
 		<PackageReference Include="NUnit" Version="4.4.0" />
-		<PackageReference Include="NUnit.Analyzers" Version="3.9.0" />
 		<PackageReference Include="NUnit3TestAdapter" Version="5.2.0" />
-		<PackageReference Include="xunit" Version="2.9.3" />
-		<PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+		<PackageReference Include="NUnit.Analyzers" Version="3.9.0" />
+
+		```
+		<!-- Mocking -->
+		<PackageReference Include="Moq" Version="4.20.72" />
+
+		<!-- Покриття тестів -->
+		<PackageReference Include="coverlet.collector" Version="6.0.0" />
+
+		<!-- Архітектурні тести -->
+		<PackageReference Include="NetArchTest.Rules" Version="1.3.2" />
+		```
+
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\NetSdrClientApp\NetSdrClientApp.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<Using Include="NUnit.Framework" />
 	</ItemGroup>
 
 </Project>

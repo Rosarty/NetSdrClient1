@@ -1,17 +1,21 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.PortableExecutable;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace NetSdrClientApp.Messages
 {
+    //TODO: analyze possible use of [StructLayout] for better performance and readability 
     public static class NetSdrMessageHelper
     {
         private const short _maxMessageLength = 8191;
         private const short _maxDataItemMessageLength = 8194;
-        private const short _msgHeaderLength = 2;
-        private const short _msgControlItemLength = 2;
-        private const short _msgSequenceNumberLength = 2;
-
+        private const short _msgHeaderLength = 2; //2 byte, 16 bit
+        private const short _msgControlItemLength = 2; //2 byte, 16 bit
+        private const short _msgSequenceNumberLength = 2; //2 byte, 16 bit
+        
         public enum MsgTypes
         {
             SetControlItem,
@@ -34,109 +38,124 @@ namespace NetSdrClientApp.Messages
             ReceiverFrequency = 0x0020
         }
 
-        // ✅ Універсальний метод побудови повідомлення
-        private static byte[] BuildMessage(MsgTypes type, ControlItemCodes itemCode, byte[] parameters)
+        public static byte[] GetControlItemMessage(MsgTypes type, ControlItemCodes itemCode, byte[] parameters)
         {
-            if (parameters is null)
-                throw new ArgumentNullException(nameof(parameters));
+            return GetMessage(type, itemCode, parameters);
+        }
 
-            var itemCodeBytes = itemCode != ControlItemCodes.None
-                ? BitConverter.GetBytes((ushort)itemCode)
-                : Array.Empty<byte>();
+        public static byte[] GetDataItemMessage(MsgTypes type, byte[] parameters)
+        {
+            return GetMessage(type, ControlItemCodes.None, parameters);
+        }
+
+        private static byte[] GetMessage(MsgTypes type, ControlItemCodes itemCode, byte[] parameters)
+        {
+            var itemCodeBytes = Array.Empty<byte>();
+            if (itemCode != ControlItemCodes.None)
+            {
+                itemCodeBytes = BitConverter.GetBytes((ushort)itemCode);
+            }
 
             var headerBytes = GetHeader(type, itemCodeBytes.Length + parameters.Length);
 
-            return headerBytes
-                .Concat(itemCodeBytes)
-                .Concat(parameters)
-                .ToArray();
+            List<byte> msg = new List<byte>();
+            msg.AddRange(headerBytes);
+            msg.AddRange(itemCodeBytes);
+            msg.AddRange(parameters);
+
+            return msg.ToArray();
         }
-
-        public static byte[] GetControlItemMessage(MsgTypes type, ControlItemCodes itemCode, byte[] parameters)
-            => BuildMessage(type, itemCode, parameters);
-
-        public static byte[] GetDataItemMessage(MsgTypes type, byte[] parameters)
-            => BuildMessage(type, ControlItemCodes.None, parameters);
 
         public static bool TranslateMessage(byte[] msg, out MsgTypes type, out ControlItemCodes itemCode, out ushort sequenceNumber, out byte[] body)
         {
             itemCode = ControlItemCodes.None;
             sequenceNumber = 0;
+            bool success = true;
+            var msgEnumarable = msg as IEnumerable<byte>;
 
-            if (msg == null || msg.Length < _msgHeaderLength)
-                throw new ArgumentException("Invalid message format");
-
-            var data = msg.AsEnumerable();
-
-            TranslateHeader(data.Take(_msgHeaderLength).ToArray(), out type, out int msgLength);
-            data = data.Skip(_msgHeaderLength);
-
+            TranslateHeader(msgEnumarable.Take(_msgHeaderLength).ToArray(), out type, out int msgLength);
+            msgEnumarable = msgEnumarable.Skip(_msgHeaderLength);
             msgLength -= _msgHeaderLength;
 
-            if (type < MsgTypes.DataItem0)
+            if (type < MsgTypes.DataItem0) // get item code
             {
-                var value = BitConverter.ToUInt16(data.Take(_msgControlItemLength).ToArray());
-                data = data.Skip(_msgControlItemLength);
+                var value = BitConverter.ToUInt16(msgEnumarable.Take(_msgControlItemLength).ToArray());
+                msgEnumarable = msgEnumarable.Skip(_msgControlItemLength);
                 msgLength -= _msgControlItemLength;
 
-                itemCode = Enum.IsDefined(typeof(ControlItemCodes), value)
-                    ? (ControlItemCodes)value
-                    : ControlItemCodes.None;
+                if (Enum.IsDefined(typeof(ControlItemCodes), value))
+                {
+                    itemCode = (ControlItemCodes)value;
+                }
+                else
+                {
+                    success = false;
+                }
             }
-            else
+            else // get sequenceNumber
             {
-                sequenceNumber = BitConverter.ToUInt16(data.Take(_msgSequenceNumberLength).ToArray());
-                data = data.Skip(_msgSequenceNumberLength);
+                sequenceNumber = BitConverter.ToUInt16(msgEnumarable.Take(_msgSequenceNumberLength).ToArray());
+                msgEnumarable = msgEnumarable.Skip(_msgSequenceNumberLength);
                 msgLength -= _msgSequenceNumberLength;
             }
 
-            body = data.ToArray();
-            return body.Length == msgLength;
+            body = msgEnumarable.ToArray();
+
+            success &= body.Length == msgLength;
+
+            return success;
         }
 
         public static IEnumerable<int> GetSamples(ushort sampleSize, byte[] body)
         {
-            sampleSize /= 8;
-            if (sampleSize > 4)
-                throw new ArgumentOutOfRangeException(nameof(sampleSize));
-
-            for (int i = 0; i + sampleSize <= body.Length; i += sampleSize)
+            sampleSize /= 8; //to bytes
+            if (sampleSize  > 4)
             {
-                var sample = body.Skip(i).Take(sampleSize)
-                    .Concat(Enumerable.Repeat((byte)0, 4 - sampleSize))
-                    .ToArray();
-                yield return BitConverter.ToInt32(sample);
+                throw new ArgumentOutOfRangeException();
+            }
+
+            var bodyEnumerable = body as IEnumerable<byte>;
+            var prefixBytes = Enumerable.Range(0, 4 - sampleSize)
+                                      .Select(b => (byte)0);
+
+            while (bodyEnumerable.Count() >= sampleSize)
+            {
+                yield return BitConverter.ToInt32(bodyEnumerable
+                    .Take(sampleSize)
+                    .Concat(prefixBytes)
+                    .ToArray());
+                bodyEnumerable = bodyEnumerable.Skip(sampleSize);
             }
         }
 
         private static byte[] GetHeader(MsgTypes type, int msgLength)
         {
-            int lengthWithHeader = NormalizeMessageLength(type, msgLength);
+            int lengthWithHeader = msgLength + 2;
+
+            //Data Items edge case
+            if (type >= MsgTypes.DataItem0 && lengthWithHeader == _maxDataItemMessageLength)
+            {
+                lengthWithHeader = 0;
+            }
+
+            if (msgLength < 0 || lengthWithHeader > _maxMessageLength)
+            {
+                throw new ArgumentException("Message length exceeds allowed value");
+            }
+
             return BitConverter.GetBytes((ushort)(lengthWithHeader + ((int)type << 13)));
         }
 
         private static void TranslateHeader(byte[] header, out MsgTypes type, out int msgLength)
         {
-            var num = BitConverter.ToUInt16(header);
+            var num = BitConverter.ToUInt16(header.ToArray());
             type = (MsgTypes)(num >> 13);
             msgLength = num - ((int)type << 13);
-            msgLength = NormalizeMessageLength(type, msgLength);
-        }
 
-        // ✅ Винесена спільна логіка розрахунку довжини
-        private static int NormalizeMessageLength(MsgTypes type, int msgLength)
-        {
-            int lengthWithHeader = msgLength + _msgHeaderLength;
-            if (type >= MsgTypes.DataItem0 && lengthWithHeader == _maxDataItemMessageLength)
-                return 0;
-            if (msgLength < 0 || lengthWithHeader > _maxMessageLength)
-                throw new ArgumentException("Message length exceeds allowed value");
-            return lengthWithHeader;
-        }
-
-        internal static object CreateDummyMessage()
-        {
-            throw new NotImplementedException();
+            if (type >= MsgTypes.DataItem0 && msgLength == 0)
+            {
+                msgLength = _maxDataItemMessageLength;
+            }
         }
     }
 }

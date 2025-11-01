@@ -1,4 +1,4 @@
-﻿using NetArchTest.Rules;
+using NetArchTest.Rules;
 using NUnit.Framework;
 using System.Linq;
 using System.Reflection;

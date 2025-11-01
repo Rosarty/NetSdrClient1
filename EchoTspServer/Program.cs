@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-public interface ILogger
+namespace EchoServer
 {
     public class EchoServer
     {
@@ -119,8 +119,6 @@ public interface ILogger
 
             await serverTask.ConfigureAwait(false);
         }
-
-        _logger.Log("Server shutdown.");
     }
 
     public class UdpTimedSender : IDisposable
@@ -131,8 +129,7 @@ public interface ILogger
         private Timer? _timer;
         private ushort _counter = 0;
 
-        while (!token.IsCancellationRequested &&
-               (bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
+        public UdpTimedSender(string host, int port)
         {
             _host = host;
             _port = port;

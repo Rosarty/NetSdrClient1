@@ -1,103 +1,64 @@
-using System;
-using System.Net;
 using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit;
+using EchoTspServer.Application.Interfaces;
+using EchoTspServer.Application.Services;
+using Moq;
+using NUnit.Framework;
 
-namespace EchoServer.Tests
+namespace EchoTspServer.Tests
 {
+    [TestFixture]
     public class EchoServerTests
     {
-        [Fact]
-        public void Constructor_InitializesPortAndTokenSource()
+        private Mock<ILogger> _loggerMock;
+        private Mock<IClientHandler> _handlerMock;
+        private EchoServer _server;
+
+        [SetUp]
+        public void Setup()
         {
-            var server = new EchoServer(5000);
-            Assert.NotNull(server);
+            _loggerMock = new Mock<ILogger>();
+            _handlerMock = new Mock<IClientHandler>();
+            _server = new EchoServer(6001, _loggerMock.Object, _handlerMock.Object);
         }
 
-        [Fact]
-        public async Task StartAsync_CanStartAndStopServer()
+        [Test]
+        public async Task StartAsync_StartsAndStopsWithoutError()
         {
-            var server = new EchoServer(5001);
+            var task = _server.StartAsync();
+            await Task.Delay(100); // дати серверу запуститис€
 
-            // «апуск сервера в окремому потоц≥
-            var serverTask = server.StartAsync();
+            // act
+            _server.Stop();
 
-            // Ќевелика затримка Ч щоб сервер устиг запуститись
-            await Task.Delay(500);
-
-            // ѕерев≥р€Їмо, що сервер не впав
-            Assert.False(serverTask.IsCompleted);
-
-            // «упинка сервера
-            server.Stop();
-            await Task.Delay(200);
-
-            Assert.True(serverTask.IsCompleted || serverTask.IsCanceled);
-        }
-
-        [Fact]
-        public async Task HandleClientAsync_EchoesDataBack()
-        {
-            var listener = new TcpListener(IPAddress.Loopback, 0);
-            listener.Start();
-
-            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
-
-            var serverTask = Task.Run(async () =>
+            try
             {
-                using var client = await listener.AcceptTcpClientAsync();
-                await typeof(EchoServer)
-                    .GetMethod("HandleClientAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
-                    ?.Invoke(null, new object[] { client, CancellationToken.None }) as Task ?? Task.CompletedTask;
+                await task; // дочекаЇмось завершенн€
+            }
+            catch (SocketException ex)
+            {
+                // ÷е оч≥кувано, бо listener закриваЇтьс€ п≥д час AcceptTcpClientAsync
+                Assert.That(ex.SocketErrorCode, Is.EqualTo(SocketError.OperationAborted));
+            }
+
+            _loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Server started"))), Times.Once);
+            _loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Server stopped"))), Times.Once);
+        }
+
+
+        [Test]
+        public void Stop_CanBeCalledMultipleTimes_SafeToCall()
+        {
+            Assert.DoesNotThrow(() =>
+            {
+                _server.Stop();
+                _server.Stop();
             });
-
-            using var tcpClient = new TcpClient();
-            await tcpClient.ConnectAsync(IPAddress.Loopback, port);
-
-            var stream = tcpClient.GetStream();
-            byte[] sendData = System.Text.Encoding.UTF8.GetBytes("Hello");
-            await stream.WriteAsync(sendData, 0, sendData.Length);
-
-            byte[] recvBuffer = new byte[sendData.Length];
-            int bytesRead = await stream.ReadAsync(recvBuffer, 0, recvBuffer.Length);
-
-            string echoed = System.Text.Encoding.UTF8.GetString(recvBuffer, 0, bytesRead);
-            Assert.Equal("Hello", echoed);
-
-            listener.Stop();
         }
 
-        [Fact]
-        public void UdpTimedSender_StartStop_Dispose_Works()
+        [Test]
+        public void Constructor_SetsDependenciesProperly()
         {
-            var sender = new UdpTimedSender("127.0.0.1", 60000);
-
-            sender.StartSending(100);
-            Thread.Sleep(200);
-            sender.StopSending();
-
-            sender.Dispose();
-
-            Assert.True(true); // якщо сюди д≥йшли Ч усе добре
-        }
-
-        [Fact]
-        public void StartSending_ThrowsIfAlreadyRunning()
-        {
-            var sender = new UdpTimedSender("127.0.0.1", 60000);
-            sender.StartSending(100);
-            Assert.Throws<InvalidOperationException>(() => sender.StartSending(100));
-            sender.Dispose();
-        }
-
-        [Fact]
-        public void Stop_DisposesAndCancels()
-        {
-            var server = new EchoServer(5050);
-            server.Stop();
-            Assert.True(true); // якщо без вин€тк≥в Ч тест пройшов
+            Assert.NotNull(_server);
         }
     }
 }

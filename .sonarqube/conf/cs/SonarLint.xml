@@ -3,7 +3,7 @@
   <Settings>
     <Setting>
       <Key>sonar.cs.opencover.reportsPaths</Key>
-      <Value>**/coverage.opencover.xml</Value>
+      <Value>NetSdrClientAppTests/TestResults/coverage.opencover.xml</Value>
     </Setting>
     <Setting>
       <Key>sonar.cs.ignoreHeaderComments</Key>

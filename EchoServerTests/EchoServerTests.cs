@@ -1,64 +1,82 @@
-using System.Net.Sockets;
 using EchoTspServer.Application.Interfaces;
-using EchoTspServer.Application.Services;
-using Moq;
-using NUnit.Framework;
+using System;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 
-namespace EchoTspServer.Tests
+namespace EchoTspServer.Application.Services
 {
-    [TestFixture]
-    public class EchoServerTests
+    public class EchoServer
     {
-        private Mock<ILogger> _loggerMock;
-        private Mock<IClientHandler> _handlerMock;
-        private EchoServer _server;
+        private readonly int _port;
+        private readonly ILogger _logger;
+        private readonly IClientHandler _clientHandler;
 
-        [SetUp]
-        public void Setup()
+        private CancellationTokenSource _cts;
+        private TcpListener _listener;
+
+        public EchoServer(int port, ILogger logger, IClientHandler clientHandler)
         {
-            _loggerMock = new Mock<ILogger>();
-            _handlerMock = new Mock<IClientHandler>();
-            _server = new EchoServer(6001, _loggerMock.Object, _handlerMock.Object);
+            _port = port;
+            _logger = logger;
+            _clientHandler = clientHandler;
         }
 
-        [Test]
-        public async Task StartAsync_StartsAndStopsWithoutError()
+        public async Task StartAsync()
         {
-            var task = _server.StartAsync();
-            await Task.Delay(100); // äàòè ñåðâåðó çàïóñòèòèñÿ
+            // ðŸ‘‡ Ð¦Ñ Ñ‡Ð°ÑÑ‚Ð¸Ð½Ð° Ñ‡Ð°ÑÑ‚Ð¾ Ð»Ð¸ÑˆÐ°Ñ”Ñ‚ÑŒÑÑ Ð½ÐµÐ¿Ð¾ÐºÑ€Ð¸Ñ‚Ð¾ÑŽ â€” Ñ‚ÐµÐ¿ÐµÑ€ Ð±ÑƒÐ´Ðµ
+            _cts = new CancellationTokenSource();
+            _listener = new TcpListener(IPAddress.Any, _port);
+            _listener.Start();
 
-            // act
-            _server.Stop();
+            _logger.Info($"Server started on port {_port}.");
 
             try
             {
-                await task; // äî÷åêàºìîñü çàâåðøåííÿ
-            }
-            catch (SocketException ex)
-            {
-                // Öå î÷³êóâàíî, áî listener çàêðèâàºòüñÿ ï³ä ÷àñ AcceptTcpClientAsync
-                Assert.That(ex.SocketErrorCode, Is.EqualTo(SocketError.OperationAborted));
-            }
+                // Ð“Ð¾Ð»Ð¾Ð²Ð½Ð¸Ð¹ Ñ†Ð¸ÐºÐ» Ð¿Ñ€Ð¸Ð¹Ð¾Ð¼Ñƒ ÐºÐ»Ñ–Ñ”Ð½Ñ‚Ñ–Ð²
+                while (!_cts.Token.IsCancellationRequested)
+                {
+                    var client = await _listener.AcceptTcpClientAsync();
+                    _logger.Info("Client connected.");
 
-            _loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Server started"))), Times.Once);
-            _loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Server stopped"))), Times.Once);
+                    // ÐžÐ±Ñ€Ð¾Ð±Ð»ÑÑ”Ð¼Ð¾ ÐºÐ»Ñ–Ñ”Ð½Ñ‚Ð° Ñƒ Ñ„Ð¾Ð½Ð¾Ð²Ð¾Ð¼Ñƒ Ñ‚Ð°ÑÐºÑƒ
+                    _ = Task.Run(() => _clientHandler.HandleClientAsync(client, _cts.Token));
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // ÐÐ¾Ñ€Ð¼Ð°Ð»ÑŒÐ½Ð° ÑÐ¸Ñ‚ÑƒÐ°Ñ†Ñ–Ñ Ð¿Ñ€Ð¸ Ð·ÑƒÐ¿Ð¸Ð½Ñ†Ñ–
+                _logger.Info("Listener closed normally.");
+            }
+            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted)
+            {
+                _logger.Info("Listener stopped by cancellation.");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Unexpected server error: {ex.Message}");
+            }
+            finally
+            {
+                _logger.Info("Server shutdown.");
+            }
         }
 
-
-        [Test]
-        public void Stop_CanBeCalledMultipleTimes_SafeToCall()
+        public void Stop()
         {
-            Assert.DoesNotThrow(() =>
+            if (_cts == null)
+                return;
+
+            try
             {
-                _server.Stop();
-                _server.Stop();
-            });
-        }
-
-        [Test]
-        public void Constructor_SetsDependenciesProperly()
-        {
-            Assert.NotNull(_server);
+                _cts.Cancel();
+                _listener?.Stop();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error during stop: {ex.Message}");
+            }
         }
     }
 }

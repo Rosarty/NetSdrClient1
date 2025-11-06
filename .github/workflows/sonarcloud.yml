@@ -51,7 +51,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # 1) BEGIN: SonarScanner for .NET
+     # 1) BEGIN: SonarScanner for .NET
       - name: SonarScanner Begin
         run: |
           dotnet tool install --global dotnet-sonarscanner
@@ -60,7 +60,7 @@ jobs:
           /k:"Rosarty_NetSdrClient1" `
           /o:"rosarty" `
           /d:sonar.token="${{ secrets.SONAR_TOKEN }}" `
-          /d:sonar.cs.opencover.reportsPaths="**/coverage.xml" `
+          /d:sonar.cs.opencover.reportsPaths="**/coverage.xml,**/EchoServerCoverage.xml" `
           /d:sonar.cpd.cs.minimumTokens=40 `
           /d:sonar.cpd.cs.minimumLines=5 `
           /d:sonar.exclusions=**/bin/**,**/obj/**,**/sonarcloud.yml `
@@ -75,10 +75,16 @@ jobs:
 
       - name: Tests with coverage (OpenCover)
         run: |
-          # 🔹 Автоматично запускає всі тестові проєкти у рішенні (.sln)
+          # 🔹 Запускає всі тести в рішенні (.sln)
           dotnet test NetSdrClient.sln -c Release --no-build `
             /p:CollectCoverage=true `
             /p:CoverletOutput=TestResults/coverage.xml `
+            /p:CoverletOutputFormat=opencover
+
+          # 🔹 Додатково запускає конкретний тестовий проєкт EchoServerTests
+          dotnet test EchoServerTests/EchoServerTests.csproj -c Release --no-build `
+            /p:CollectCoverage=true `
+            /p:CoverletOutput=TestResults/EchoServerCoverage.xml `
             /p:CoverletOutputFormat=opencover
         shell: pwsh
 

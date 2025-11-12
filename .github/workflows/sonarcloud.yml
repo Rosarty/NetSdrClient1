@@ -64,6 +64,7 @@ jobs:
           /d:sonar.cpd.cs.minimumTokens=40 `
           /d:sonar.cpd.cs.minimumLines=5 `
           /d:sonar.exclusions=**/bin/**,**/obj/**,**/sonarcloud.yml `
+          /d:sonar.coverage.exclusions="**/Program.cs,**/TcpClientWrapper.cs,**/UdpClientWrapper.cs"
         shell: pwsh
 
       # 2) BUILD & TEST

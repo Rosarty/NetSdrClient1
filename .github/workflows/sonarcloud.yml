@@ -66,8 +66,7 @@ jobs:
           /d:sonar.exclusions=**/bin/**,**/obj/**,**/sonarcloud.yml `
           /d:sonar.coverage.exclusions="**/Program.cs,**/TcpClientWrapper.cs,**/UdpClientWrapper.cs"
         shell: pwsh
-
-      # 2) BUILD & TEST
+        # 2) BUILD & TEST
       - name: Restore
         run: dotnet restore NetSdrClient.sln
 
@@ -76,16 +75,10 @@ jobs:
 
       - name: Tests with coverage (OpenCover)
         run: |
-          # 🔹 Запускає всі тести в рішенні (.sln)
+          # 🔹 Автоматично запускає всі тестові проєкти у рішенні (.sln)
           dotnet test NetSdrClient.sln -c Release --no-build `
             /p:CollectCoverage=true `
             /p:CoverletOutput=TestResults/coverage.xml `
-            /p:CoverletOutputFormat=opencover
-
-          # 🔹 Додатково запускає конкретний тестовий проєкт EchoServerTests
-          dotnet test EchoServerTests/EchoServerTests.csproj -c Release --no-build `
-            /p:CollectCoverage=true `
-            /p:CoverletOutput=TestResults/EchoServerCoverage.xml `
             /p:CoverletOutputFormat=opencover
         shell: pwsh
 
@@ -93,3 +86,30 @@ jobs:
       - name: SonarScanner End
         run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
         shell: pwsh
+
+      # # 2) BUILD & TEST
+      # - name: Restore
+      #   run: dotnet restore NetSdrClient.sln
+
+      # - name: Build
+      #   run: dotnet build NetSdrClient.sln -c Release --no-restore
+
+      # - name: Tests with coverage (OpenCover)
+      #   run: |
+      #     # 🔹 Запускає всі тести в рішенні (.sln)
+      #     dotnet test NetSdrClient.sln -c Release --no-build `
+      #       /p:CollectCoverage=true `
+      #       /p:CoverletOutput=TestResults/coverage.xml `
+      #       /p:CoverletOutputFormat=opencover
+
+      #     # 🔹 Додатково запускає конкретний тестовий проєкт EchoServerTests
+      #     dotnet test EchoServerTests/EchoServerTests.csproj -c Release --no-build `
+      #       /p:CollectCoverage=true `
+      #       /p:CoverletOutput=TestResults/EchoServerCoverage.xml `
+      #       /p:CoverletOutputFormat=opencover
+      #   shell: pwsh
+
+      # # 3) END: SonarScanner
+      # - name: SonarScanner End
+      #   run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+      #   shell: pwsh

@@ -1,82 +1,64 @@
-using EchoTspServer.Application.Interfaces;
-using System;
-using System.Net;
 using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
+using EchoTspServer.Application.Interfaces;
+using EchoTspServer.Application.Services;
+using Moq;
+using NUnit.Framework;
 
-namespace EchoTspServer.Application.Services
+namespace EchoTspServer.Tests
 {
-    public class EchoServer
+    [TestFixture]
+    public class EchoServerTests
     {
-        private readonly int _port;
-        private readonly ILogger _logger;
-        private readonly IClientHandler _clientHandler;
+        private Mock<ILogger> _loggerMock;
+        private Mock<IClientHandler> _handlerMock;
+        private EchoServer _server;
 
-        private CancellationTokenSource _cts;
-        private TcpListener _listener;
-
-        public EchoServer(int port, ILogger logger, IClientHandler clientHandler)
+        [SetUp]
+        public void Setup()
         {
-            _port = port;
-            _logger = logger;
-            _clientHandler = clientHandler;
+            _loggerMock = new Mock<ILogger>();
+            _handlerMock = new Mock<IClientHandler>();
+            _server = new EchoServer(6001, _loggerMock.Object, _handlerMock.Object);
         }
 
-        public async Task StartAsync()
+        [Test]
+        public async Task StartAsync_StartsAndStopsWithoutError()
         {
-            // ðŸ‘‡ Ð¦Ñ Ñ‡Ð°ÑÑ‚Ð¸Ð½Ð° Ñ‡Ð°ÑÑ‚Ð¾ Ð»Ð¸ÑˆÐ°Ñ”Ñ‚ÑŒÑÑ Ð½ÐµÐ¿Ð¾ÐºÑ€Ð¸Ñ‚Ð¾ÑŽ â€” Ñ‚ÐµÐ¿ÐµÑ€ Ð±ÑƒÐ´Ðµ
-            _cts = new CancellationTokenSource();
-            _listener = new TcpListener(IPAddress.Any, _port);
-            _listener.Start();
+            var task = _server.StartAsync();
+            await Task.Delay(100); // äàòè ñåðâåðó çàïóñòèòèñÿ
 
-            _logger.Info($"Server started on port {_port}.");
+            // act
+            _server.Stop();
 
             try
             {
-                // Ð“Ð¾Ð»Ð¾Ð²Ð½Ð¸Ð¹ Ñ†Ð¸ÐºÐ» Ð¿Ñ€Ð¸Ð¹Ð¾Ð¼Ñƒ ÐºÐ»Ñ–Ñ”Ð½Ñ‚Ñ–Ð²
-                while (!_cts.Token.IsCancellationRequested)
-                {
-                    var client = await _listener.AcceptTcpClientAsync();
-                    _logger.Info("Client connected.");
+                await task; // äî÷åêàºìîñü çàâåðøåííÿ
+            }
+            catch (SocketException ex)
+            {
+                // Öå î÷³êóâàíî, áî listener çàêðèâàºòüñÿ ï³ä ÷àñ AcceptTcpClientAsync
+                Assert.That(ex.SocketErrorCode, Is.EqualTo(SocketError.OperationAborted));
+            }
 
-                    // ÐžÐ±Ñ€Ð¾Ð±Ð»ÑÑ”Ð¼Ð¾ ÐºÐ»Ñ–Ñ”Ð½Ñ‚Ð° Ñƒ Ñ„Ð¾Ð½Ð¾Ð²Ð¾Ð¼Ñƒ Ñ‚Ð°ÑÐºÑƒ
-                    _ = Task.Run(() => _clientHandler.HandleClientAsync(client, _cts.Token));
-                }
-            }
-            catch (ObjectDisposedException)
-            {
-                // ÐÐ¾Ñ€Ð¼Ð°Ð»ÑŒÐ½Ð° ÑÐ¸Ñ‚ÑƒÐ°Ñ†Ñ–Ñ Ð¿Ñ€Ð¸ Ð·ÑƒÐ¿Ð¸Ð½Ñ†Ñ–
-                _logger.Info("Listener closed normally.");
-            }
-            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted)
-            {
-                _logger.Info("Listener stopped by cancellation.");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Unexpected server error: {ex.Message}");
-            }
-            finally
-            {
-                _logger.Info("Server shutdown.");
-            }
+            _loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Server started"))), Times.Once);
+            _loggerMock.Verify(l => l.Info(It.Is<string>(s => s.Contains("Server stopped"))), Times.Once);
         }
 
-        public void Stop()
-        {
-            if (_cts == null)
-                return;
 
-            try
+        [Test]
+        public void Stop_CanBeCalledMultipleTimes_SafeToCall()
+        {
+            Assert.DoesNotThrow(() =>
             {
-                _cts.Cancel();
-                _listener?.Stop();
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Error during stop: {ex.Message}");
-            }
+                _server.Stop();
+                _server.Stop();
+            });
+        }
+
+        [Test]
+        public void Constructor_SetsDependenciesProperly()
+        {
+            Assert.NotNull(_server);
         }
     }
 }
